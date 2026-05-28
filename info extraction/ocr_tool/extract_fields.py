@@ -33,53 +33,110 @@ def load_api_key() -> str:
     return key
 
 
-PROMPT = """You are analyzing scanned images of a Hebrew pension form package.
+PROMPT = """You are analyzing scanned images of a Hebrew pension/savings form package.
 The package may contain multiple forms including:
   1. "טופס הצטרפות" (Joining form) — has:
        * "פרטי החברה המנהלת" table whose first cell header is "שם החברה המנהלת" (managing company name).
        * "פרטי המעסיק" employer details ("שם המעסיק", etc.).
        * A "מעמד" row with 4 checkboxes (שכיר / שכיר בעל שליטה / עצמאי / עצמאי באמצעות מעסיק).
        * Its main header may indicate the product type, e.g. "טופס הצטרפות לקופת גמל",
-         "טופס הצטרפות לקרן פנסיה", "טופס הצטרפות לקרן השתלמות".
+         "טופס הצטרפות לקופת גמל להשקעה", "טופס הצטרפות לקרן פנסיה",
+         "טופס הצטרפות לקרן השתלמות".
   2. "טופס בקשת העברה" (Transfer request form) — its main header ALWAYS includes the product
-     type, e.g. "טופס בקשת העברה לקרן פנסיה" / "...לקופת גמל" / "...לקרן השתלמות".
-     This form has:
+     type, e.g. "טופס בקשת העברה לקרן פנסיה" / "...לקופת גמל" / "...לקופת גמל להשקעה" /
+     "...לקרן השתלמות". This form has:
        * A "לכבוד" header at top naming the SOURCE managing company (the firm currently
          holding the money — the one we are transferring FROM).
        * A "פרטי העמית" table with "עמית פעיל"/"עמית לא פעיל" checkboxes.
        * A "פרטי חשבון קופה מעבירה" section containing the source-fund ACCOUNT NUMBER
-         (NOT the customer's ID / תעודת זהות).
+         (NOT the customer's ID / תעודת זהות). May also include the source product type
+         (e.g. "גמל", "השתלמות", "פנסיה", "גמל להשקעה").
 
-Extract EXACTLY these 6 fields and return ONLY a JSON object (no markdown, no commentary):
+Product values: "השתלמות", "גמל", "גמל להשקעה", "פנסיה", "ייפוי-כח".
+  - "גמל להשקעה" (Gemel LeHashkaa) is a distinct product from regular "גמל". Identify it from
+    explicit mentions of "גמל להשקעה" / "קופת גמל להשקעה" in form headers or product fields.
+  - If the document only contains a power-of-attorney (ייפוי כוח / יפוי כח), return "ייפוי-כח".
 
-{
-  "product": one of "השתלמות", "גמל", "פנסיה", "ייפוי-כח" — determined from the form headers
-      ("טופס הצטרפות ל..." or "טופס בקשת העברה ל..."). For a power-of-attorney document (ייפוי כוח)
-      return "ייפוי-כח".
-  "active_status": "active" or "inactive",
-  "client_status": "שכיר" or "עצמאי" (based on which checkbox is marked in מעמד),
-  "transfer_to_company": short Hebrew brand name of the RECEIVING company — this is the company
-      named in the joining form's "שם החברה המנהלת" (where the money is going TO).
-      Examples: "הראל", "מור", "הפניקס", "מיטב", "אלטשולר שחם", "מנורה", "אינטרגמל".
-  "transfer_from_company": short Hebrew brand name of the SOURCE company — this is the company
-      written after "לכבוד" at the top of the "טופס בקשת העברה" (the firm currently holding the
-      money). Same format as transfer_to_company. MUST be different from transfer_to_company
-      in a real transfer.
-  "transfer_from_pos": the SOURCE-FUND ACCOUNT NUMBER from "פרטי חשבון קופה מעבירה" — typically
-      labeled "מספר חשבון" / "חשבון מספר". It is the fund/policy account number, NOT the
-      customer's national ID (תעודת זהות, which is 9 digits and matches the עמית's ת.ז.).
-      Return as a string of digits.
-}
+Three extraction modes — choose ONE based on the document content:
+
+MODE A — "גמל להשקעה" product (Gemel LeHashkaa):
+  Skip employee/non-employee status and active/inactive status. Extract:
+  {
+    "product": "גמל להשקעה",
+    "transfer_to_company": short Hebrew brand name of the RECEIVING managing company
+        (from joining form's "שם החברה המנהלת"),
+    "transfer_from_company": short Hebrew brand name of the SOURCE company
+        (written after "לכבוד" in "טופס בקשת העברה"),
+    "transfer_from_product": the SOURCE product type at the transferring company
+        (e.g. "גמל", "השתלמות", "פנסיה", "גמל להשקעה") — taken from the transfer-form
+        header or "פרטי חשבון קופה מעבירה" section,
+    "transfer_from_pos": SOURCE-FUND ACCOUNT NUMBER from "פרטי חשבון קופה מעבירה"
+        ("מספר חשבון" / "חשבון מספר") if it appears in the transfer form. Return as a
+        string of digits. If absent from the form, return null.
+        NEVER use the customer's national ID (תעודת זהות) here.
+    "active_status": null,
+    "client_status": null
+  }
+
+MODE B — Empty document (no company's own forms / unfilled placeholder):
+  The package does NOT include the managing company's own joining/transfer documents
+  (e.g. only contains a generic cover sheet, an empty ייפוי כוח, or scanned filler with
+  no real form data). Extract only:
+  {
+    "product": product name if it can be inferred from any header, else null,
+    "transfer_to_company": company name if visible anywhere, else null,
+    "active_status": null,
+    "client_status": null,
+    "transfer_from_company": null,
+    "transfer_from_product": null,
+    "transfer_from_pos": null
+  }
+
+MODE C — Standard form (default: "גמל" / "השתלמות" / "פנסיה" / "ייפוי-כח"):
+  Extract all fields:
+  {
+    "product": one of "השתלמות", "גמל", "פנסיה", "ייפוי-כח",
+    "active_status": "active" or "inactive",
+    "client_status": "שכיר" or "עצמאי" (based on the checked מעמד box),
+    "transfer_to_company": short Hebrew brand name of the RECEIVING company
+        (from joining form's "שם החברה המנהלת").
+        Examples: "הראל", "מור", "הפניקס", "מיטב", "אלטשולר שחם", "מנורה", "אינטרגמל".
+    "transfer_from_company": short Hebrew brand name of the SOURCE company
+        (written after "לכבוד" in "טופס בקשת העברה"). Same format as transfer_to_company.
+        MUST differ from transfer_to_company in a real transfer.
+    "transfer_from_product": SOURCE product type at the transferring company
+        (e.g. "גמל", "השתלמות", "פנסיה", "גמל להשקעה"), or null if not present.
+    "transfer_from_pos": SOURCE-FUND ACCOUNT NUMBER from "פרטי חשבון קופה מעבירה" —
+        labeled "מספר חשבון" / "חשבון מספר". The fund/policy account number, NOT the
+        customer's national ID (תעודת זהות, 9 digits matching the עמית's ת.ז.).
+        Return as a string of digits.
+  }
+
+Return ONLY a single JSON object (no markdown, no commentary). The object MUST contain
+ALL these keys (use null where the chosen mode says to skip a field):
+  product, active_status, client_status, transfer_to_company, transfer_from_company,
+  transfer_from_product, transfer_from_pos.
 
 Rules:
-- NEVER return the customer's תעודת זהות (national ID) as transfer_from_pos. The customer ID
-  appears in "פרטי העמית" labeled "ת.ז." / "מספר זהות" and is NOT the answer.
-- For active_status: prefer the "עמית פעיל / לא פעיל" checkboxes. If unclear, infer from
-  "שם המעסיק" — non-empty → "active", empty → "inactive".
-- For client_status: if either שכיר box is checked return "שכיר"; if either עצמאי box is
-  checked return "עצמאי".
-- For product: if the package is purely a power-of-attorney (ייפוי כוח / יפוי כח) document
-  without joining/transfer forms, return "ייפוי-כח".
+- NEVER return the customer's תעודת זהות (national ID) as transfer_from_pos. The customer
+  ID appears in "פרטי העמית" labeled "ת.ז." / "מספר זהות" and is NOT the answer.
+- CRITICAL: the "מעמד" row (שכיר / עצמאי / שכיר בעל שליטה / עצמאי באמצעות מעסיק) is the
+  customer's EMPLOYMENT STATUS — it drives client_status ONLY. It is NEVER evidence for
+  active_status. Do NOT infer "active" just because "שכיר" is checked.
+- For active_status (Mode C only) — decision priority:
+    1) If "טופס בקשת העברה" contains "עמית פעיל / לא פעיל" checkboxes (or
+       "עמית פעיל בקופת הגמל המעבירה" / "עמית לא פעיל בקופת הגמל המעבירה"), use them:
+         * "פעיל" checked   -> "active"
+         * "לא פעיל" checked -> "inactive"
+    2) Otherwise, look at "שם המעסיק" in פרטי מעסיק of the joining form:
+         non-empty -> "active", empty -> "inactive".
+    3) If still undetermined -> null.
+- For client_status (Mode C only): if either שכיר box is checked return "שכיר"; if either
+  עצמאי box is checked return "עצמאי".
+- transfer_from_pos applies in BOTH Mode A and Mode C: if the transfer form
+  ("טופס בקשת העברה" / "פרטי חשבון קופה מעבירה") contains an account number labeled
+  "מספר חשבון" / "חשבון מספר" / "מספר החשבון בקופת הגמל המעבירה" — return it as a string
+  of digits. Otherwise null.
 - If a field cannot be determined from the images, set its value to null.
 - Return ONLY valid JSON, no other text.
 """

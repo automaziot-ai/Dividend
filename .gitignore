@@ -29,3 +29,10 @@ dist-ssr
 *.pem
 *.pem.pub
 AWS secrete access key.yml
+
+# Python
+__pycache__/
+*.pyc
+
+# OCR extraction outputs (client PII)
+info extraction/ocr_tool/extraction_results*.json
