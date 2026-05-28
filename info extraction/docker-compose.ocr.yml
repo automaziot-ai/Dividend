@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  ocr-extractor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dividend_ocr_extractor
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OCR_MODEL=${OCR_MODEL:-gemini-3.5-flash}
+      - OCR_DPI=${OCR_DPI:-400}
+    networks:
+      - dividend_network
+
+networks:
+  dividend_network:
+    external: true
+    name: ubuntu_dividend_network
