@@ -1,0 +1,118 @@
+version: '3.8'
+
+services:
+
+  # n8n automation service
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: dividend_n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      - WEBHOOK_URL=http://51.84.74.23:5678/
+      - GENERIC_TIMEZONE=Asia/Jerusalem
+      # Database
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=n8n
+      - DB_POSTGRESDB_PASSWORD=Dv!d3nd_Pg#2026xKq9
+      # Queue mode with Redis
+      - EXECUTIONS_MODE=queue
+      - QUEUE_BULL_REDIS_HOST=redis
+      - QUEUE_BULL_REDIS_PORT=6379
+      - N8N_COMMUNITY_PACKAGES_ENABLED=false
+      - N8N_SECURE_COOKIE=false
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - dividend_network
+
+  # n8n worker
+  n8n-worker:
+    image: n8nio/n8n:latest
+    container_name: dividend_n8n_worker
+    restart: unless-stopped
+    command: worker
+    environment:
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      - GENERIC_TIMEZONE=Asia/Jerusalem
+      # Database
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=n8n
+      - DB_POSTGRESDB_PASSWORD=Dv!d3nd_Pg#2026xKq9
+      # Queue mode with Redis
+      - EXECUTIONS_MODE=queue
+      - QUEUE_BULL_REDIS_HOST=redis
+      - QUEUE_BULL_REDIS_PORT=6379
+      - N8N_COMMUNITY_PACKAGES_ENABLED=false
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      - postgres
+      - redis
+      - n8n
+    networks:
+      - dividend_network
+
+  # PostgreSQL database
+  postgres:
+    image: postgres:15
+    container_name: dividend_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=n8n
+      - POSTGRES_USER=n8n
+      - POSTGRES_PASSWORD=Dv!d3nd_Pg#2026xKq9
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dividend_network
+
+  # Redis for queue mode
+  redis:
+    image: redis:7-alpine
+    container_name: dividend_redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - dividend_network
+
+  # ZIP Extractor Service (disabled until Dockerfile is ready)
+  # zip-extractor:
+  #   build:
+  #     context: ./dividend-zipextraction
+  #   container_name: dividend_zip_extractor
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     - PORT=8080
+  #     - ZIP_PASSWORD=abc123
+  #   networks:
+  #     - dividend_network
+
+volumes:
+  n8n_data:
+  postgres_data:
+  redis_data:
+
+networks:
+  dividend_network:
+    driver: bridge
