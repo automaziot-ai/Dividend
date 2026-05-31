@@ -74,6 +74,9 @@ MODE A — "גמל להשקעה" product (Gemel LeHashkaa):
         ("מספר חשבון" / "חשבון מספר") if it appears in the transfer form. Return as a
         string of digits. If absent from the form, return null.
         NEVER use the customer's national ID (תעודת זהות) here.
+    "customer_id": customer's national ID from the JOINING form ("טופס הצטרפות") inside
+        the "פרטי העמית" table, cell labeled "מספר זהות/דרכון" (a.k.a. "ת.ז." /
+        "מספר זהות"). Return as a string of digits, or null if absent.
     "active_status": null,
     "client_status": null
   }
@@ -89,7 +92,8 @@ MODE B — Empty document (no company's own forms / unfilled placeholder):
     "client_status": null,
     "transfer_from_company": null,
     "transfer_from_product": null,
-    "transfer_from_pos": null
+    "transfer_from_pos": null,
+    "customer_id": null
   }
 
 MODE C — Standard form (default: "גמל" / "השתלמות" / "פנסיה" / "ייפוי-כח"):
@@ -110,12 +114,15 @@ MODE C — Standard form (default: "גמל" / "השתלמות" / "פנסיה" / 
         labeled "מספר חשבון" / "חשבון מספר". The fund/policy account number, NOT the
         customer's national ID (תעודת זהות, 9 digits matching the עמית's ת.ז.).
         Return as a string of digits.
+    "customer_id": customer's national ID from the JOINING form ("טופס הצטרפות") inside
+        the "פרטי העמית" table, cell labeled "מספר זהות/דרכון" (a.k.a. "ת.ז." /
+        "מספר זהות"). Return as a string of digits, or null if absent.
   }
 
 Return ONLY a single JSON object (no markdown, no commentary). The object MUST contain
 ALL these keys (use null where the chosen mode says to skip a field):
   product, active_status, client_status, transfer_to_company, transfer_from_company,
-  transfer_from_product, transfer_from_pos.
+  transfer_from_product, transfer_from_pos, customer_id.
 
 Rules:
 - NEVER return the customer's תעודת זהות (national ID) as transfer_from_pos. The customer

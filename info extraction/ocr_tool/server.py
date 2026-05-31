@@ -20,16 +20,21 @@ def health():
 
 @app.post("/extract")
 def extract_endpoint():
-    if "file" not in request.files:
-        return jsonify(error="missing 'file' form field"), 400
-    f = request.files["file"]
-    model = request.form.get("model", DEFAULT_MODEL)
-    dpi = int(request.form.get("dpi", DEFAULT_DPI))
+    model = request.values.get("model", DEFAULT_MODEL)
+    dpi = int(request.values.get("dpi", DEFAULT_DPI))
 
-    suffix = Path(f.filename or "upload.pdf").suffix or ".pdf"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        f.save(tmp.name)
-        tmp_path = Path(tmp.name)
+    if "file" in request.files:
+        f = request.files["file"]
+        suffix = Path(f.filename or "upload.pdf").suffix or ".pdf"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            f.save(tmp.name)
+            tmp_path = Path(tmp.name)
+    elif request.data:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(request.data)
+            tmp_path = Path(tmp.name)
+    else:
+        return jsonify(error="no PDF in request (send multipart 'file' or raw body)"), 400
     try:
         return jsonify(extract(tmp_path, model, dpi))
     except Exception as e:
