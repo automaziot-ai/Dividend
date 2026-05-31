@@ -77,6 +77,9 @@ MODE A — "גמל להשקעה" product (Gemel LeHashkaa):
     "customer_id": customer's national ID from the JOINING form ("טופס הצטרפות") inside
         the "פרטי העמית" table, cell labeled "מספר זהות/דרכון" (a.k.a. "ת.ז." /
         "מספר זהות"). Return as a string of digits, or null if absent.
+    "agent_name": licensed agent's full name from the JOINING form ("טופס הצטרפות")
+        inside the "פרטי בעל הרישיון" table — concatenate "שם פרטי" + " " + "שם משפחה".
+        Return as a Hebrew string, or null if absent.
     "active_status": null,
     "client_status": null
   }
@@ -93,7 +96,8 @@ MODE B — Empty document (no company's own forms / unfilled placeholder):
     "transfer_from_company": null,
     "transfer_from_product": null,
     "transfer_from_pos": null,
-    "customer_id": null
+    "customer_id": null,
+    "agent_name": null
   }
 
 MODE C — Standard form (default: "גמל" / "השתלמות" / "פנסיה" / "ייפוי-כח"):
@@ -117,12 +121,15 @@ MODE C — Standard form (default: "גמל" / "השתלמות" / "פנסיה" / 
     "customer_id": customer's national ID from the JOINING form ("טופס הצטרפות") inside
         the "פרטי העמית" table, cell labeled "מספר זהות/דרכון" (a.k.a. "ת.ז." /
         "מספר זהות"). Return as a string of digits, or null if absent.
+    "agent_name": licensed agent's full name from the JOINING form ("טופס הצטרפות")
+        inside the "פרטי בעל הרישיון" table — concatenate "שם פרטי" + " " + "שם משפחה".
+        Return as a Hebrew string, or null if absent.
   }
 
 Return ONLY a single JSON object (no markdown, no commentary). The object MUST contain
 ALL these keys (use null where the chosen mode says to skip a field):
   product, active_status, client_status, transfer_to_company, transfer_from_company,
-  transfer_from_product, transfer_from_pos, customer_id.
+  transfer_from_product, transfer_from_pos, customer_id, agent_name.
 
 Rules:
 - NEVER return the customer's תעודת זהות (national ID) as transfer_from_pos. The customer
